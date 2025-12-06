@@ -1,0 +1,114 @@
+import numpy as np
+import pytest
+from Projet2 import Dataset, LinearRegression, RegressionResult, train_linear_regression
+
+#Tests_dataset
+
+def test_dataset_dimensions_and_names():
+    X = np.random.randn(40, 4)
+    y = np.random.randn(40)
+    feature_names = ["X0", "X1", "X2", "X3"]
+
+    data = Dataset(X, y, feature_names)
+
+    assert data.X.shape == (40, 4)
+    assert data.y.shape == (40, 1)
+    assert data.features_names == feature_names
+
+def test_add_intercept():
+    X = np.random.randn(50, 2)
+    y = np.random.randn(50)
+    data = Dataset(X, y, ["X1", "X2"])
+    data.add_intercept()
+
+    assert data.X.shape == (50, 3)
+    assert data.features_names[0] == "intercept"
+    assert np.allclose(data.X[:, 0], 1.0)
+
+#Tests_régression_linéaire
+
+def test_linear_regression_fit_sets_coefficients_and_names():
+    X = np.random.randn(60, 3)
+    y = np.random.randn(60)
+
+    model = LinearRegression()
+    model.fit(X, y, ["a", "b", "c"])
+
+    assert model.coefficients is not None
+    assert model.features_names == ["a", "b", "c"]
+    assert model.coefficients.shape == (3, 1)
+
+def test_predict_raises_before_fit():
+    model = LinearRegression()
+    with pytest.raises(ValueError):
+        model.predict(np.array([[1.0, 2.0, 3.0]]))
+
+def test_predict_shape_matches_number_of_observations():
+    n, p = 40, 2
+    X = np.random.randn(n, p)
+    y = np.random.randn(n)
+
+    model = LinearRegression()
+    model.fit(X, y, [f"X{i}" for i in range(p)])
+
+    y_hat = model.predict(X)
+    assert y_hat.shape == (n, 1)
+
+def test_to_dict_keys_and_values_types():
+    X = np.random.randn(50, 2)
+    y = np.random.randn(50)
+
+    feature_names = ["X1", "X2"]
+    model = LinearRegression()
+    model.fit(X, y, feature_names)
+
+    coef_dict = model.to_dict()
+
+    assert set(coef_dict.keys()) == set(feature_names)
+    for v in coef_dict.values():
+        assert isinstance(v, float)
+
+#Tests pour RegressionResult
+
+def test_r2():
+    n, p = 80, 2
+    X = np.random.randn(n, p)
+    y = np.random.randn(n)
+
+    data = Dataset(X, y, [f"X{i}" for i in range(p)])
+    result = train_linear_regression(data)
+
+    assert result.R2 <= 1.0
+
+def test_mse_non_negative():
+    X = np.random.randn(60, 2)
+    y = np.random.randn(60)
+
+    data = Dataset(X, y, ["X1", "X2"])
+    result = train_linear_regression(data)
+
+    assert result.mse() >= 0
+
+
+#Tests_fonction_principale
+
+def test_train_linear_regression_returns_regression_result():
+    X = np.random.randn(50, 2)
+    y = np.random.randn(50)
+
+    data = Dataset(X, y, ["X1", "X2"])
+    result = train_linear_regression(data)
+
+    assert isinstance(result, RegressionResult)
+    assert result.y_true.shape == result.y_pred.shape
+
+def test_train_linear_regression_adds_intercept_in_model_features():
+    X = np.random.randn(50, 2)
+    y = np.random.randn(50)
+
+    data = Dataset(X, y, ["X1", "X2"])
+    result = train_linear_regression(data)
+
+    assert result.model.features_names[0] == "intercept"
+    assert len(result.model.features_names) == 1 + X.shape[1]
+    assert result.model.coefficients.shape == (1 + X.shape[1], 1)
