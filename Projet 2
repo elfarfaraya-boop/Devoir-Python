@@ -1,0 +1,161 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_regression
+
+#Etape 1 : Classe Dataset
+
+class Dataset:
+    def __init__(self, X: np.ndarray, y: np.ndarray, features_names: list):
+        self.X = X
+        self.y = y.reshape(-1, 1)
+        self.features_names = list(features_names)
+
+    def add_intercept(self):
+        if self.features_names and self.features_names[0] == "intercept":
+            return
+        n = self.X.shape[0]
+        intercept = np.ones((n, 1))
+        self.X = np.hstack((intercept, self.X))
+        self.features_names.insert(0, "intercept")
+
+    def to_dataframe(self):
+        df_X = pd.DataFrame(self.X, columns=self.features_names)
+        df_y = pd.Series(self.y.reshape(-1), name="y")
+        return df_X, df_y
+
+#Étape 2 : Régression linéaire
+
+class LinearRegression:
+    def __init__(self):
+        self.coefficients= None
+        self.features_names = None
+
+    def fit(self, X: np.ndarray, y: np.ndarray, features_names: list[str] | None = None):
+        y = y.reshape(-1, 1)
+        XtX = np.dot(X.T, X)
+        Xty = np.dot(X.T, y)
+        self.coefficients = np.dot(np.linalg.inv(XtX), Xty)
+        self.features_names = features_names
+        return self
+
+    def predict(self, X_new: np.ndarray) -> np.ndarray:
+        if self.coefficients is None:
+            raise ValueError("Le modèle n'a pas encore été entraîné")
+        if X_new.ndim == 1:
+            X_new = X_new.reshape(1, -1)
+        return X_new @ self.coefficients
+
+    def to_dict(self) -> dict:
+        if self.coefficients is None or self.features_names is None:
+            raise ValueError("Modèle non entraîné")
+        return {self.features_names[i]: float(self.coefficients[i,0]) for i in range(len(self.features_names))}
+
+
+#Étape 3 : Résultats
+
+class RegressionResult:
+    def __init__(self, model: LinearRegression, y_true: np.ndarray, y_pred: np.ndarray):
+        self.model = model
+        self.y_true = y_true.reshape(-1, 1)
+        self.y_pred = y_pred.reshape(-1, 1)
+        self.R2 = self._compute_r2()
+
+    def _compute_r2(self) -> float:
+        y = self.y_true
+        y_hat = self.y_pred
+        y_mean = np.mean(y)
+
+        ssr = np.sum((y - y_hat) ** 2)
+        sst = np.sum((y - y_mean) ** 2)
+        return float(1 - ssr / sst)
+
+    def mse(self) -> float:
+        n = len(self.y_true)
+        return float(np.sum((self.y_true - self.y_pred) ** 2) / n)
+
+    def rmse(self) -> float:
+        return float(np.sqrt(self.mse()))
+
+    def summary(self):
+        print("Résultats de la régression linéaire")
+
+        coef_dict = self.model.to_dict()
+        df_coef = pd.Series(coef_dict, name='Coefficient').to_frame()
+        print("Coefficients :")
+        print(df_coef.to_markdown(numalign="left", stralign="left"))
+
+        print("\nPerformance :")
+        print(f"\nR²   : {self.R2:.4f}")
+        print(f"MSE  : {self.mse():.4f}")
+        print(f"RMSE : {self.rmse():.4f}")
+
+        print("\nAperçu des erreurs :")
+        data_errors = []
+        for i in range(min(5, len(self.y_true))):
+            yt = float(self.y_true[i,0])
+            yp = float(self.y_pred[i,0])
+            err = yt - yp
+            data_errors.append({
+                "y_true": yt,
+                "y_pred": yp,
+                "erreur": err
+            })
+
+        df_errors = pd.DataFrame(data_errors)
+        print(df_errors.to_markdown(index=False))
+
+#Étape 4 : Fonction principale
+def train_linear_regression(dataset: Dataset) -> RegressionResult:
+    dataset.add_intercept()
+    model = LinearRegression()
+    model.fit(dataset.X, dataset.y, features_names=dataset.features_names)
+    y_pred = model.predict(dataset.X)
+    result = RegressionResult(model, dataset.y, y_pred)
+    return result
+
+
+if __name__ == "__main__":
+
+    #Exemple 1 :  Régression simple
+
+    X_raw, y_raw = make_regression(
+        n_samples=100,
+        n_features=1,
+        noise=10,
+        random_state=0
+    )
+
+    p=1
+    features_names = [f"X{i}" for i in range(p)]
+    dataset = Dataset(X_raw, y_raw, features_names)
+
+    result = train_linear_regression(dataset)
+
+    result.summary()
+
+    X_with_intercept = dataset.X
+    plt.scatter(X_with_intercept[:, 1], dataset.y, label="Données réelles")
+    plt.plot(X_with_intercept[:, 1], result.y_pred, c="r", label="Prédiction")
+    plt.xlabel("x1")
+    plt.ylabel("y")
+    plt.legend()
+    plt.title("Régression linéaire (MCO)")
+    plt.show()
+
+    #Exemple 2 : Régression multiple
+
+    X_raw, y_raw = make_regression(
+        n_samples=100,
+        n_features=4,
+        noise=10,
+        random_state=0
+    )
+
+    p=4
+    features_names = [f"X{i}" for i in range(p)]
+    dataset = Dataset(X_raw, y_raw, features_names)
+
+    result = train_linear_regression(dataset)
+
+    result.summary()
